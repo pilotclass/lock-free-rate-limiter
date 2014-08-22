@@ -33,7 +33,7 @@ public class RateLimiter {
         return tryAcquire(items, nanosFor(instant));
     }
 
-    public void rollback(long items) {
+    private void rollback(long items) {
         nextAvailableTimestamp.addAndGet(-items * nsPerItem);
     }
 
