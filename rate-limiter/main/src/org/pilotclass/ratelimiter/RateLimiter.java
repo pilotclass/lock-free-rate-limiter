@@ -71,6 +71,10 @@ public class RateLimiter {
             numAcquired = 0;
         }
 
+        public long getWaitNanos() {
+            return waitNanos;
+        }
+
         public void waitBeforeTryingAgain() throws InterruptedException {
             final long millis = TimeUnit.NANOSECONDS.toMillis(waitNanos);
             final int nanos = (int) (waitNanos - TimeUnit.MILLISECONDS.toNanos(millis));

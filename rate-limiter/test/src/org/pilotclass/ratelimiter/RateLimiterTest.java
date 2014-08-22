@@ -68,10 +68,18 @@ public class RateLimiterTest {
         RateLimiter rl = new RateLimiter(4, 100, TimeUnit.NANOSECONDS, 4, now);
         assertFalse(rl.tryAcquire(5,now.plusNanos(0)).acquired());
     }
+
+    @Test
+    public void testWait() {
+        RateLimiter rl = new RateLimiter(4, 100, TimeUnit.SECONDS, 4, now);
+        final RateLimiter.Acquisition acquisition = rl.tryAcquire(1, now);
+        assertEquals(acquisition.getWaitNanos(), TimeUnit.SECONDS.toNanos(100)/4);
+    }
+
     @Test
     public void testUsage() throws InterruptedException {
         final int EXPECTED_ACCURACY_ON_WINDOWS_XP = 15;
-        final int cycles = 10;
+        final int cycles = 2;
         final int numPerTestTimeUnit = 1_234_567;
         final TimeUnit testTimeUnit = TimeUnit.SECONDS;
         final RateLimiter rl = RateLimiter.createPreFilled(numPerTestTimeUnit, 1, testTimeUnit);
