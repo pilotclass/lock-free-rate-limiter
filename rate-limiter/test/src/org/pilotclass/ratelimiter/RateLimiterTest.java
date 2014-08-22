@@ -16,15 +16,17 @@ public class RateLimiterTest {
     }
 
     @Test
-    public void testPrefill() {
-        RateLimiter rl = new RateLimiter(10, 100, 2, now);
+    public void testPreFill() {
+        RateLimiter rl = new RateLimiter(10, 100, TimeUnit.NANOSECONDS, 2, now);
         assertFalse(rl.tryAcquire(9, now).acquired());
         assertTrue(rl.tryAcquire(8, now).acquired());
+        rl = new RateLimiter(10, 1, TimeUnit.SECONDS, 20, now);
+        assertFalse(rl.tryAcquire(1, now).acquired());
     }
 
     @Test
     public void testRollback() {
-        RateLimiter rl = new RateLimiter(10, 100, 0, now);
+        RateLimiter rl = new RateLimiter(10, 100, TimeUnit.NANOSECONDS, 0, now);
         RateLimiter.Acquisition acquisition = rl.tryAcquire(10, now);
         assertTrue(acquisition.acquired());
         assertFalse(rl.tryAcquire(1, now).acquired());
@@ -35,14 +37,14 @@ public class RateLimiterTest {
 
     @Test
     public void testThatAcquireTakesAway() {
-        RateLimiter rl = new RateLimiter(10, 100, 0, now);
+        RateLimiter rl = new RateLimiter(10, 100, TimeUnit.NANOSECONDS, 0, now);
         assertTrue(rl.tryAcquire(10, now).acquired());
         assertFalse(rl.tryAcquire(0, now).acquired());
     }
 
     @Test
     public void testConstructedEmptyAllowsStuffing() {
-        RateLimiter rl = new RateLimiter(10, 100, 0, now);
+        RateLimiter rl = new RateLimiter(10, 100, TimeUnit.NANOSECONDS, 0, now);
         assertTrue(rl.tryAcquire(10, now).acquired());
     }
 
@@ -63,12 +65,12 @@ public class RateLimiterTest {
 
     @Test
     public void testOverAcquire() {
-        RateLimiter rl = new RateLimiter(4, 100, 4, now);
+        RateLimiter rl = new RateLimiter(4, 100, TimeUnit.NANOSECONDS, 4, now);
         assertFalse(rl.tryAcquire(5,now.plusNanos(0)).acquired());
     }
     @Test
     public void testUsage() {
-        final int EXPECTED_ACCURACY_ON_WINDOWS_XP = 10;
+        final int EXPECTED_ACCURACY_ON_WINDOWS_XP = 15;
         final int cycles = 1;
         final int numPerTestTimeUnit = 1_234_567;
         final TimeUnit testTimeUnit = TimeUnit.SECONDS;
@@ -76,16 +78,16 @@ public class RateLimiterTest {
         int count = cycles * numPerTestTimeUnit;
         final long startNs = System.nanoTime();
         while (count > 0) {
-            if (rl.tryAcquireNow().acquired()) {
+            if (rl.tryAcquireNow(1).acquired()) {
                 count--;
             }
         }
         final long endNs = System.nanoTime();
         final long elapsedMs = TimeUnit.NANOSECONDS.toMillis(endNs - startNs);
         final long expectedMs = testTimeUnit.toMillis(cycles);
-        assertTrue(Math.abs(elapsedMs - expectedMs) < EXPECTED_ACCURACY_ON_WINDOWS_XP);
         // Enable to see actual vs elapsed time
 //        assertEquals(expectedMs, elapsedMs);
+        assertTrue(Math.abs(elapsedMs - expectedMs) < EXPECTED_ACCURACY_ON_WINDOWS_XP);
     }
 
 }

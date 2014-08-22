@@ -5,57 +5,53 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class RateLimiter {
-    private final long maxItems;
     private final long windowNs;
     private final long nsPerItem;
-    private final AtomicLong nextAvailable;
+    private final AtomicLong nextAvailableTimestamp;
+    private final Acquisition nothingAcquired = new Acquisition(0);
 
-    public RateLimiter(long maxItems, long window, TimeUnit timeUnit, long prefill, Instant now) {
-        this(maxItems, timeUnit.toNanos(window), prefill, now);
+    public RateLimiter(final long maxItems, final long window, final TimeUnit timeUnit, final long preFill, final Instant now) {
+        this(maxItems, timeUnit.toNanos(window), preFill, now);
     }
 
-    public RateLimiter(long maxItems, long windowNs, long prefill, Instant now) {
-        this.maxItems = maxItems;
+    private RateLimiter(final long maxItems, final long windowNs, final long preFill, final Instant now) {
         this.windowNs = windowNs;
         this.nsPerItem = windowNs / maxItems;
-        nextAvailable = new AtomicLong(nextAvailableGiven(now, maxItems - prefill));
+        nextAvailableTimestamp = new AtomicLong(0);
+        tryAcquire(Math.min(maxItems, preFill), now);
     }
 
-    public static RateLimiter createPreFilled(long maxItems, long window, TimeUnit timeUnit) {
+    public static RateLimiter createPreFilled(final long maxItems, final long window, final TimeUnit timeUnit) {
         return new RateLimiter(maxItems, window, timeUnit, maxItems, Instant.now());
     }
 
-    public Acquisition tryAcquireNow() {
-        return tryAcquire(1, Instant.now());
+    public Acquisition tryAcquireNow(final int items) {
+        return tryAcquire(items, Instant.now());
+    }
+
+    public Acquisition tryAcquire(final long items, final Instant instant) {
+        return tryAcquire(items, nanosFor(instant));
     }
 
     public void rollback(long items) {
-        nextAvailable.addAndGet(-items * nsPerItem);
+        nextAvailableTimestamp.addAndGet(-items * nsPerItem);
     }
 
-    public void setAvailable(final Instant instant, final long available) {
-        this.nextAvailable.set(nextAvailableGiven(instant, available));
-    }
-
-    private long nextAvailableGiven(Instant instant, long available) {
-        return asNanos(instant) - available * nsPerItem;
-    }
-
-    private static long asNanos(Instant instant) {
-        return TimeUnit.SECONDS.toNanos(instant.getEpochSecond()) + instant.getNano();
-    }
-
-    public Acquisition tryAcquire(long items, Instant instant) {
-        return tryAcquire(items, asNanos(instant));
-    }
-
-    private Acquisition tryAcquire(long items, long instantNs) {
-        long localNextAvailable = nextAvailable.get();
-        long newNextAvailable = Long.max(localNextAvailable, instantNs - windowNs) + items * nsPerItem;
-        if (newNextAvailable <= instantNs && nextAvailable.compareAndSet(localNextAvailable, newNextAvailable)) {
+    private Acquisition tryAcquire(final long items, final long timestampOfAcquisition) {
+        final long localNextAvailable = nextAvailableTimestamp.get();
+        final long newNextAvailableTimestamp = nextAvailableTimestampAfterAcquiring(items, timestampOfAcquisition, localNextAvailable);
+        if (newNextAvailableTimestamp <= timestampOfAcquisition && nextAvailableTimestamp.compareAndSet(localNextAvailable, newNextAvailableTimestamp)) {
             return new Acquisition(items);
         }
-        return new Acquisition(0);
+        return nothingAcquired;
+    }
+
+    private long nextAvailableTimestampAfterAcquiring(final long items, final long timestampOfAcquisition, final long previousNextAvailableTimestamp) {
+        return Long.max(previousNextAvailableTimestamp, timestampOfAcquisition - windowNs) + items * nsPerItem;
+    }
+
+    private static long nanosFor(final Instant instant) {
+        return TimeUnit.SECONDS.toNanos(instant.getEpochSecond()) + instant.getNano();
     }
 
     public class Acquisition {
