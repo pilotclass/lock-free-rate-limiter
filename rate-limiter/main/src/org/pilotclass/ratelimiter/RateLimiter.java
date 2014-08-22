@@ -8,7 +8,6 @@ public class RateLimiter {
     private final long windowNs;
     private final long nsPerItem;
     private final AtomicLong nextAvailableTimestamp;
-    private final Acquisition nothingAcquired = new Acquisition(0);
 
     public RateLimiter(final long maxItems, final long window, final TimeUnit timeUnit, final long preFill, final Instant now) {
         this(maxItems, timeUnit.toNanos(window), preFill, now);
@@ -41,9 +40,9 @@ public class RateLimiter {
         final long localNextAvailable = nextAvailableTimestamp.get();
         final long newNextAvailableTimestamp = nextAvailableTimestampAfterAcquiring(items, timestampOfAcquisition, localNextAvailable);
         if (newNextAvailableTimestamp <= timestampOfAcquisition && nextAvailableTimestamp.compareAndSet(localNextAvailable, newNextAvailableTimestamp)) {
-            return new Acquisition(items);
+            return new Acquisition(items, 0);
         }
-        return nothingAcquired;
+        return new Acquisition(0, newNextAvailableTimestamp - timestampOfAcquisition);
     }
 
     private long nextAvailableTimestampAfterAcquiring(final long items, final long timestampOfAcquisition, final long previousNextAvailableTimestamp) {
@@ -56,9 +55,11 @@ public class RateLimiter {
 
     public class Acquisition {
         private long numAcquired;
+        private final long waitNanos;
 
-        private Acquisition(long numAcquired) {
+        private Acquisition(long numAcquired, long waitNanos) {
             this.numAcquired = numAcquired;
+            this.waitNanos = waitNanos;
         }
 
         public boolean acquired() {
@@ -68,6 +69,12 @@ public class RateLimiter {
         public void rollback() {
             RateLimiter.this.rollback(numAcquired);
             numAcquired = 0;
+        }
+
+        public void waitBeforeTryingAgain() throws InterruptedException {
+            final long millis = TimeUnit.NANOSECONDS.toMillis(waitNanos);
+            final int nanos = (int) (waitNanos - TimeUnit.MILLISECONDS.toNanos(millis));
+            Thread.sleep(millis, nanos);
         }
     }
 }

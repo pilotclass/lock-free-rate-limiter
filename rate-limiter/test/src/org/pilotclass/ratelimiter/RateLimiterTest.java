@@ -69,17 +69,20 @@ public class RateLimiterTest {
         assertFalse(rl.tryAcquire(5,now.plusNanos(0)).acquired());
     }
     @Test
-    public void testUsage() {
+    public void testUsage() throws InterruptedException {
         final int EXPECTED_ACCURACY_ON_WINDOWS_XP = 15;
-        final int cycles = 1;
+        final int cycles = 10;
         final int numPerTestTimeUnit = 1_234_567;
         final TimeUnit testTimeUnit = TimeUnit.SECONDS;
         final RateLimiter rl = RateLimiter.createPreFilled(numPerTestTimeUnit, 1, testTimeUnit);
         int count = cycles * numPerTestTimeUnit;
         final long startNs = System.nanoTime();
         while (count > 0) {
-            if (rl.tryAcquireNow(1).acquired()) {
+            final RateLimiter.Acquisition acquisition = rl.tryAcquireNow(1);
+            if (acquisition.acquired()) {
                 count--;
+            } else {
+                acquisition.waitBeforeTryingAgain();
             }
         }
         final long endNs = System.nanoTime();
